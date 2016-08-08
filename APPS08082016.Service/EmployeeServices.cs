@@ -71,7 +71,6 @@ namespace APPS08082016.Service
             try
             {
                 IEnumerable<EmployeeInfoEntity> employee = _employeeRepository.Table;
-                var employeek = _employeeRepository.GetById(1);
                 if (employee == null || !employee.Any())
                     return new OperationListResponse<EmployeeInfo>
                     {
