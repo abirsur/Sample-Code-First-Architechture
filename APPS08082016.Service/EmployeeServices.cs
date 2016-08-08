@@ -9,7 +9,7 @@ using APPS08082016.Service.Contract;
 
 namespace APPS08082016.Service
 {
-    public sealed class EmployeeServices : IEmployeeServices
+    public class EmployeeServices : IEmployeeServices, IDisposable
     {
         #region Stored Procedure Definations
         private static string PROC_EMPLOYEE_GET { get; } = "proc_EmployeeInfo_Get";
@@ -100,5 +100,10 @@ namespace APPS08082016.Service
         #region Using Stored Procedures
 
         #endregion
+
+        public void Dispose()
+        {
+           this.Dispose();
+        }
     }
 }
