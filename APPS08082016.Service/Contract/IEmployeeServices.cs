@@ -44,38 +44,44 @@ def fuzzy_fill(data_list, key):
             if best_match:
                 entry['extracted_data'][key] = best_match['extracted_data'][key]
 
-# Function to get best match for a key field
-def get_best_match(data_list, key):
-    best_match = None
+# Function to get best matches for a key field and return filtered sources
+def get_best_matches_and_sources(data_list, key):
+    best_matches = []
     highest_score = 0
+    best_match_value = None
     for entry in data_list:
-        score = fuzz.ratio(entry['extracted_data'].get(key, ''), entry['extracted_data'].get(key, ''))
-        if score > highest_score:
-            highest_score = score
-            best_match = entry
-    return best_match
+        for other_entry in data_list:
+            if entry != other_entry:
+                score = fuzz.ratio(entry['extracted_data'].get(key, ''), other_entry['extracted_data'].get(key, ''))
+                if score > highest_score:
+                    highest_score = score
+                    best_match_value = entry['extracted_data'].get(key)
+    for entry in data_list:
+        if fuzz.ratio(entry['extracted_data'].get(key, ''), best_match_value) > 80:  # Threshold for fuzzy match
+            best_matches.append(entry)
+    return best_matches
 
 # Function to merge data from different sources
 def merge_data(data_list, fields):
     merged_data = {}
     for field in fields:
         for entry in data_list:
-            if entry['extracted_data'].get(field) and entry['extracted_data'][field].strip():
+            if entry['extracted_data'].get(field):
                 merged_data[field] = entry['extracted_data'][field]
                 break
     return merged_data
 
-# Get best matches for client and broker groups
-client_best_match = get_best_match(filtered_data, client_key)
-broker_best_match = get_best_match(filtered_data, broker_key)
+# Get best matches and sources for client and broker groups
+client_best_matches = get_best_matches_and_sources(filtered_data, client_key)
+broker_best_matches = get_best_matches_and_sources(filtered_data, broker_key)
 
 # Fill missing data for client and broker groups
-fuzzy_fill(filtered_data, client_key)
-fuzzy_fill(filtered_data, broker_key)
+fuzzy_fill(client_best_matches, client_key)
+fuzzy_fill(broker_best_matches, broker_key)
 
 # Merge data for client and broker groups
-client_data = merge_data(filtered_data, client_fields)
-broker_data = merge_data(filtered_data, broker_fields)
+client_data = merge_data(client_best_matches, client_fields)
+broker_data = merge_data(broker_best_matches, broker_fields)
 
 # Merge data for other group
 other_data = merge_data(filtered_data, other_fields)
