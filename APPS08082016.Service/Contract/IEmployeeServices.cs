@@ -11,16 +11,18 @@ namespace APPS08082016.Service.Contract
 
 #-----------------------------------------------------------------------------
 
-# app.py
 import os
 import sys
 from azure.servicebus import ServiceBusClient, ServiceBusMessage
+from azure.storage.blob import BlobServiceClient
 
 CONNECTION_STR = os.getenv("SERVICE_BUS_CONNECTION_STRING")
 QUEUE_NAME = os.getenv("SERVICE_BUS_QUEUE_NAME")
 RESPONSE_QUEUE_NAME = os.getenv("SERVICE_BUS_RESPONSE_QUEUE_NAME")
+BLOB_CONNECTION_STR = os.getenv("BLOB_CONNECTION_STRING")
 
 servicebus_client = ServiceBusClient.from_connection_string(conn_str=CONNECTION_STR)
+blob_service_client = BlobServiceClient.from_connection_string(BLOB_CONNECTION_STR)
 
 def process_message(message):
     try:
@@ -62,6 +64,16 @@ def receive_messages():
                 process_message(message)
     except Exception as e:
         print(f"Failed to receive messages: {str(e)}")
+
+def download_blob(container_name, blob_name, file_name):
+    try:
+        container_client = blob_service_client.get_container_client(container_name)
+        blob_client = container_client.get_blob_client(blob_name)
+        with open(file_name, "wb") as download_file:
+            download_file.write(blob_client.download_blob().readall())
+        print(f"Downloaded {blob_name} to {file_name}")
+    except Exception as e:
+        print(f"Failed to download blob: {str(e)}")
 
 if __name__ == "__main__":
     receive_messages()
