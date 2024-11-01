@@ -9,6 +9,8 @@ namespace APPS08082016.Service.Contract
     }
 }
 
+#-----------------------------------------------------------------------------
+
 # app.py
 import os
 import sys
@@ -63,7 +65,20 @@ def receive_messages():
 
 if __name__ == "__main__":
     receive_messages()
+-----------------------------------------------------------------------------------------------------
 
+# Dockerfile
+FROM python:3.9-slim
+
+WORKDIR /app
+
+COPY pyproject.toml poetry.lock /app/
+RUN pip install poetry && poetry install --no-dev
+
+COPY . /app
+
+CMD ["poetry", "run", "python", "app.py"]
+------------------------------------------------------------------------------------------------------
 # job.yaml
 apiVersion: batch/v1
 kind: Job
@@ -88,8 +103,8 @@ spec:
           value: "<your-service-bus-response-queue-name>"
       restartPolicy: Never
   backoffLimit: 0
-
-
+  
+----------------------------------------------------------------------------------------
 # scaledobject.yaml
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
@@ -106,5 +121,3 @@ spec:
       queueName: <your-service-bus-queue-name>
       connection: SERVICE_BUS_CONNECTION_STRING
       messageCount: "1"  # Scale when there is at least 1 message in the queue
-
-
