@@ -9,86 +9,102 @@ namespace APPS08082016.Service.Contract
     }
 }
 
-/* # sample data remove please
+# app.py
+import os
+import sys
+from azure.servicebus import ServiceBusClient, ServiceBusMessage
 
-import json
-from fuzzywuzzy import fuzz
+CONNECTION_STR = os.getenv("SERVICE_BUS_CONNECTION_STRING")
+QUEUE_NAME = os.getenv("SERVICE_BUS_QUEUE_NAME")
+RESPONSE_QUEUE_NAME = os.getenv("SERVICE_BUS_RESPONSE_QUEUE_NAME")
 
-# Load data from JSON file
-with open('extracted_data.json', 'r') as file:
-    data = json.load(file)
+servicebus_client = ServiceBusClient.from_connection_string(conn_str=CONNECTION_STR)
 
-# Define groups and parent key fields
-client_fields = ["Client_Name", "Client_Billing_Street", "Client_Billing_City", "Client_Billing_Zip", "Client_Billing_State", "Client_Billing_Country", "Client_Email_Address"]
-broker_fields = ["Broker_Agency_Name", "Broker_Producer_Contact_Name", "Broker_Producer_Street", "Broker_Producer_City", "Broker_Producer_Zip", "Broker_Producer_State", "Broker_Producer_Country", "Broker_Phone_Number", "Broker_Producer_Email_Address"]
-other_fields = ["Client_SIC", "Client_NAICS", "Client_FEIN", "Policy_Line_of_Business", "Policy_Effective_Date", "Policy_Expiration_Date"]
+def process_message(message):
+    try:
+        # Read data from the message
+        data = message.body.decode('utf-8')
+        # Process the data
+        result = process_data(data)
+        # Log the response
+        log_response(result)
+    except Exception as e:
+        # Log the exception
+        log_response(str(e))
+    finally:
+        try:
+            message.complete()
+        except Exception as e:
+            log_response(f"Failed to complete message: {str(e)}")
 
-client_key = "Client_Name"
-broker_key = "Broker_Agency_Name"
+def process_data(data):
+    # Implement your data processing logic here
+    return f"Processed data: {data}"
 
-# Filter data
-filtered_data = [entry for entry in data if entry['type'].startswith('Acord') or entry['type'].startswith('Applied')]
+def log_response(response):
+    try:
+        with servicebus_client.get_queue_sender(queue_name=RESPONSE_QUEUE_NAME) as sender:
+            response_message = ServiceBusMessage(response)
+            sender.send_messages(response_message)
+    except Exception as e:
+        print(f"Failed to log response: {str(e)}")
 
-# Function to perform fuzzy matching and fill missing data
-def fuzzy_fill(data_list, key):
-    for entry in data_list:
-        if not entry['extracted_data'].get(key):
-            best_match = None
-            highest_score = 0
-            for other_entry in data_list:
-                if other_entry != entry and other_entry['extracted_data'].get(key):
-                    score = fuzz.ratio(entry['extracted_data'].get(key, ''), other_entry['extracted_data'].get(key, ''))
-                    if score > highest_score:
-                        highest_score = score
-                        best_match = other_entry
-            if best_match:
-                entry['extracted_data'][key] = best_match['extracted_data'][key]
+def receive_messages():
+    try:
+        with servicebus_client.get_queue_receiver(queue_name=QUEUE_NAME) as receiver:
+            messages = receiver.receive_messages(max_message_count=10, max_wait_time=5)
+            if not messages:
+                print("No more messages to process. Exiting.")
+                sys.exit(0)
+            for message in messages:
+                process_message(message)
+    except Exception as e:
+        print(f"Failed to receive messages: {str(e)}")
 
-# Function to get best matches for a key field and return filtered sources
-def get_best_matches_and_sources(data_list, key):
-    best_matches = []
-    highest_score = 0
-    best_match_value = None
-    for entry in data_list:
-        for other_entry in data_list:
-            if entry != other_entry:
-                score = fuzz.ratio(entry['extracted_data'].get(key, ''), other_entry['extracted_data'].get(key, ''))
-                if score > highest_score:
-                    highest_score = score
-                    best_match_value = entry['extracted_data'].get(key)
-    for entry in data_list:
-        if fuzz.ratio(entry['extracted_data'].get(key, ''), best_match_value) > 80:  # Threshold for fuzzy match
-            best_matches.append(entry)
-    return best_matches
+if __name__ == "__main__":
+    receive_messages()
 
-# Function to merge data from different sources
-def merge_data(data_list, fields):
-    merged_data = {}
-    for field in fields:
-        for entry in data_list:
-            if entry['extracted_data'].get(field):
-                merged_data[field] = entry['extracted_data'][field]
-                break
-    return merged_data
+# job.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: your-app-job
+spec:
+  ttlSecondsAfterFinished: 100  # Time to live after job completion
+  template:
+    spec:
+      containers:
+      - name: your-app
+        image: <your-registry>/your-app:latest
+        env:
+        - name: SERVICE_BUS_CONNECTION_STRING
+          valueFrom:
+            secretKeyRef:
+              name: service-bus-secret
+              key: connection-string
+        - name: SERVICE_BUS_QUEUE_NAME
+          value: "<your-service-bus-queue-name>"
+        - name: SERVICE_BUS_RESPONSE_QUEUE_NAME
+          value: "<your-service-bus-response-queue-name>"
+      restartPolicy: Never
+  backoffLimit: 0
 
-# Get best matches and sources for client and broker groups
-client_best_matches = get_best_matches_and_sources(filtered_data, client_key)
-broker_best_matches = get_best_matches_and_sources(filtered_data, broker_key)
 
-# Fill missing data for client and broker groups
-fuzzy_fill(client_best_matches, client_key)
-fuzzy_fill(broker_best_matches, broker_key)
+# scaledobject.yaml
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: your-app-scaledobject
+spec:
+  scaleTargetRef:
+    kind: Job
+    name: your-app-job
+  triggers:
+  - type: azure-servicebus
+    metadata:
+      namespace: <your-namespace>
+      queueName: <your-service-bus-queue-name>
+      connection: SERVICE_BUS_CONNECTION_STRING
+      messageCount: "1"  # Scale when there is at least 1 message in the queue
 
-# Merge data for client and broker groups
-client_data = merge_data(client_best_matches, client_fields)
-broker_data = merge_data(broker_best_matches, broker_fields)
 
-# Merge data for other group
-other_data = merge_data(filtered_data, other_fields)
-
-# Combine all groups into a single object
-result = {**client_data, **broker_data, **other_data}
-
-print(json.dumps(result, indent=4))
-
-*/
