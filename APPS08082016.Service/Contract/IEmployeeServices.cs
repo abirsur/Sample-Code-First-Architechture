@@ -9,27 +9,5 @@ namespace APPS08082016.Service.Contract
     }
 }
 
-#------------------------------------------
-{
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "name": "Python: FastAPI (Poetry)",
-            "type": "python",
-            "request": "launch",
-            "program": "${workspaceFolder}/path/to/your/main.py",
-            "args": [
-                "run",
-                "--host",
-                "127.0.0.1",
-                "--port",
-                "8000"
-            ],
-            "console": "integratedTerminal",
-            "env": {
-                "POETRY_ACTIVE": "1"
-            },
-            "envFile": "${workspaceFolder}/.env"
-        }
-    ]
-}
+[System.Environment]::SetEnvironmentVariable('POPPLER_PATH', 'C:\path\to\poppler\bin', [System.EnvironmentVariableTarget]::Machine)
+[System.Environment]::SetEnvironmentVariable('TESSERACT_PATH', 'C:\Program Files\Tesseract-OCR', [System.EnvironmentVariableTarget]::Machine)
